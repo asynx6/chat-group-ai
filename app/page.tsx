@@ -31,6 +31,7 @@ interface Message {
   timestamp: number;
   replyTo?: string;
   isError?: boolean;
+  imageCount?: number;
 }
 
 interface ImageAttachment {
@@ -106,6 +107,7 @@ export default function HomePage() {
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [resetDialog, setResetDialog] = useState(false);
   const [resetCountdown, setResetCountdown] = useState(5);
+  const [sendKey, setSendKey] = useState(0);
   const [typingAgents, setTypingAgents] = useState<Set<string>>(new Set());
   const [agentMemory, setAgentMemory] = useState<Record<string, MemoryEntry[]>>({});
 
@@ -449,12 +451,15 @@ export default function HomePage() {
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: text,
+      content: text || (images.length > 0 ? '🖼️' : ''),
       timestamp: Date.now(),
+      imageCount: images.length,
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
+    setImages([]);
+    setSendKey((k) => k + 1);
     setSending(true);
 
     const baseHistory = [...messages, userMsg].map((m) => ({
@@ -642,7 +647,7 @@ export default function HomePage() {
       {/* Floating Input Pill */}
       <div className="p-3 pb-5 shrink-0 flex justify-center">
         <div className="w-full max-w-2xl bg-[#1a1a1a] rounded-3xl shadow-2xl ring-1 ring-white/10 flex items-center gap-2 px-3 py-2">
-          <ImageUpload onUpload={handleImageUpload} disabled={sending} />
+          <ImageUpload key={sendKey} onUpload={handleImageUpload} disabled={sending} />
           <div className="flex-1">
             <MentionInput
               value={input}

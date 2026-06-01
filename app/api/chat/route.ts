@@ -40,12 +40,18 @@ export async function POST(req: NextRequest) {
     ? `You are ${agent.name}. ${agent.personalityPrompt}\n\nRespond in the same language as the user's message. Keep responses concise and natural.`
     : `You are ${agent.name}, a helpful AI assistant. Respond in the same language as the user's message.`;
 
-  // Build messages array with system prompt
-  const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+  // Only add system prompt if client hasn't already sent one
+  const hasSystemMessage = messages.length > 0 && messages[0].role === 'system';
+  const rawMessages: { role: string; content: string }[] = hasSystemMessage ? messages : [
     { role: 'system', content: systemPrompt },
-    ...messages.map((m: { role: string; content: string }, i: number) => {
+    ...messages,
+  ];
+
+  // Build final chat messages with multimodal image support
+  const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = rawMessages.map(
+    (m: { role: string; content: string }, i: number) => {
       // If this is the last user message and we have images, make it multimodal
-      if (m.role === 'user' && i === messages.length - 1 && images && images.length > 0) {
+      if (m.role === 'user' && i === rawMessages.length - 1 && images && images.length > 0) {
         const parts: OpenAI.Chat.ChatCompletionContentPart[] = [
           { type: 'text', text: m.content || 'Describe this image:' },
         ];
@@ -61,8 +67,7 @@ export async function POST(req: NextRequest) {
         role: m.role as 'user' | 'assistant',
         content: m.content,
       };
-    }),
-  ];
+    });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
