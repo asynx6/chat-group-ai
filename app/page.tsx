@@ -27,6 +27,7 @@ interface Message {
   agentId?: string;
   agentName?: string;
   agentColor?: string;
+  agentImage?: string;
   timestamp: number;
   replyTo?: string;
 }
@@ -116,6 +117,7 @@ export default function HomePage() {
       agentId: agent.id,
       agentName: agent.name,
       agentColor: agent.color,
+      agentImage: agent.profileLink || undefined,
       timestamp: Date.now(),
       replyTo,
     };
@@ -357,12 +359,20 @@ export default function HomePage() {
                 }`}
                 title={agent.muted ? `Unmute ${agent.name}` : `Mute ${agent.name}`}
               >
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                  style={{ backgroundColor: agent.color }}
-                >
-                  {agent.name[0]}
-                </div>
+                {agent.profileLink ? (
+                  <img
+                    src={agent.profileLink}
+                    alt={agent.name}
+                    className="w-6 h-6 rounded-full object-cover ring-1 ring-white/20"
+                  />
+                ) : (
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                    style={{ backgroundColor: agent.color }}
+                  >
+                    {agent.name[0]}
+                  </div>
+                )}
                 <span className="text-xs text-gray-300">{agent.name}</span>
                 {typingAgents.has(agent.id) && (
                   <span className="flex gap-0.5 ml-1">

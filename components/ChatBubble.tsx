@@ -10,6 +10,7 @@ interface Message {
   agentId?: string;
   agentName?: string;
   agentColor?: string;
+  agentImage?: string;
   timestamp: number;
 }
 
@@ -23,7 +24,7 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
   return (
     <div className={`flex gap-3 animate-fade-in-up ${isUser ? 'flex-row-reverse' : ''}`}>
       {!isUser && message.agentName && (
-        <AgentAvatar name={message.agentName} color={message.agentColor || '#6b7280'} />
+        <AgentAvatar name={message.agentName} color={message.agentColor || '#6b7280'} imageUrl={message.agentImage} />
       )}
 
       <div className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'}`}>
