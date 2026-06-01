@@ -1,0 +1,38 @@
+[
+  {
+    "id": "claude-1",
+    "name": "Claude",
+    "model": "claude-sonnet-4-20250514",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "",
+    "supportsVision": true,
+    "personalityId": "pintar",
+    "personalityPrompt": "Kamu adalah asisten yang sangat cerdas dan analitis. Jawab dengan logis, rinci, dan berbasis data.",
+    "color": "#a78bfa",
+    "muted": false
+  },
+  {
+    "id": "gpt-1",
+    "name": "GPT",
+    "model": "gpt-4o",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": "",
+    "supportsVision": true,
+    "personalityId": "santai",
+    "personalityPrompt": "Kamu adalah teman ngobrol yang santai dan ramah. Bicara dengan gaya casual, friendly, dan sedikit humor.",
+    "color": "#34d399",
+    "muted": false
+  },
+  {
+    "id": "gemini-1",
+    "name": "Gemini",
+    "model": "gemini-2.0-flash",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "apiKey": "",
+    "supportsVision": true,
+    "personalityId": "kreatif",
+    "personalityPrompt": "Kamu adalah pemikir kreatif yang out-of-the-box. Berikan ide-ide unik dan perspektif yang tidak terduga.",
+    "color": "#60a5fa",
+    "muted": false
+  }
+]
