@@ -24,14 +24,6 @@ export default function PersonalityPicker({ value, onChange, apiKey, baseUrl, mo
   const [customPrompt, setCustomPrompt] = useState('');
 
   useEffect(() => {
-    fetch('/api/agents')
-      .then((r) => r.json())
-      .then(setPersonalities)
-      .catch(() => {});
-  }, []);
-
-  // Also load personalities list
-  useEffect(() => {
     fetch('/api/personalities')
       .then((r) => r.json())
       .then((data) => {
