@@ -38,6 +38,40 @@ interface ImageAttachment {
   hash: string;
 }
 
+// --- localStorage helpers ---
+const MESSAGES_KEY = 'chat_messages';
+const AGENT_MEMORY_KEY = 'agent_memory';
+
+function loadMessages(): Message[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const data = localStorage.getItem(MESSAGES_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch { return []; }
+}
+
+function saveMessages(msgs: Message[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(msgs));
+  } catch {}
+}
+
+function loadAgentMemory(): Record<string, string[]> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const data = localStorage.getItem(AGENT_MEMORY_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch { return {}; }
+}
+
+function saveAgentMemory(mem: Record<string, string[]>) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(AGENT_MEMORY_KEY, JSON.stringify(mem));
+  } catch {}
+}
+
 function parseMentions(text: string, agents: Agent[]): string[] {
   const mentioned = new Set<string>();
   for (const agent of agents) {
@@ -56,9 +90,26 @@ export default function HomePage() {
   const [sending, setSending] = useState(false);
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [typingAgents, setTypingAgents] = useState<Set<string>>(new Set());
+  const [agentMemory, setAgentMemory] = useState<Record<string, string[]>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const initializedRef = useRef(false);
+
+  // Load saved messages + agent memory on mount
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    setMessages(loadMessages());
+    setAgentMemory(loadAgentMemory());
+  }, []);
+
+  // Save messages to localStorage whenever they change (skip initial load)
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveMessages(messages);
+    }
+  }, [messages]);
 
   useEffect(() => {
     fetch('/api/agents')
@@ -101,6 +152,33 @@ export default function HomePage() {
         body: JSON.stringify(agent),
       });
     }
+  };
+
+  const buildAgentHistory = (agent: Agent, baseHistory: { role: string; content: string }[]) => {
+    const memories = agentMemory[agent.id];
+    if (!memories || memories.length === 0) return baseHistory;
+
+    const memoryContext = `[INGATAN KAMU dari percakapan sebelumnya — gunakan ini untuk konteks dan jangan diabaikan]:\n${memories.map((m, i) => `${i + 1}. ${m}`).join('\n')}`;
+
+    return [
+      { role: 'system' as const, content: memoryContext },
+      ...baseHistory,
+    ];
+  };
+
+  const updateAgentMemory = (agentId: string, userText: string, agentResponse: string) => {
+    if (!agentResponse.trim()) return;
+
+    const entry = `User: "${userText}" → Kamu menjawab: "${agentResponse.slice(0, 300)}"`;
+    setAgentMemory((prev) => {
+      const existing = prev[agentId] || [];
+      // Keep last 15 memory entries, newest first, avoid duplicates
+      const filtered = existing.filter((m) => !m.includes(userText));
+      const updated = [entry, ...filtered].slice(0, 15);
+      const next = { ...prev, [agentId]: updated };
+      saveAgentMemory(next);
+      return next;
+    });
   };
 
   const fetchAndStreamAgentResponse = async (
@@ -276,7 +354,7 @@ export default function HomePage() {
     setInput('');
     setSending(true);
 
-    const history = [...messages, userMsg].map((m) => ({
+    const baseHistory = [...messages, userMsg].map((m) => ({
       role: m.role,
       content: m.content,
     }));
@@ -284,8 +362,10 @@ export default function HomePage() {
     // Phase 1: All target agents respond to user
     const responses: { agent: Agent; text: string }[] = [];
     for (const agent of targetAgents) {
-      const responseText = await fetchAndStreamAgentResponse(agent, history);
+      const historyWithMemory = buildAgentHistory(agent, baseHistory);
+      const responseText = await fetchAndStreamAgentResponse(agent, historyWithMemory);
       responses.push({ agent, text: responseText });
+      updateAgentMemory(agent.id, text, responseText);
     }
 
     // Phase 2: AI-to-AI replies
@@ -307,19 +387,21 @@ export default function HomePage() {
           alreadyReplied.add(agentId);
 
           const context = [
-            ...history,
+            ...baseHistory,
             ...responses.map((r) => ({
               role: 'assistant' as const,
               content: `[${r.agent.name}]: ${r.text}`,
             })),
           ];
 
+          const contextWithMemory = buildAgentHistory(agent, context);
           const aiResponseText = await fetchAndStreamAgentResponse(
             agent,
-            context,
+            contextWithMemory,
             reply.agent.id
           );
           nextReplies.push({ agent, text: aiResponseText });
+          updateAgentMemory(agent.id, reply.text.slice(0, 200), aiResponseText);
         }
       }
       aiReplies = nextReplies;
