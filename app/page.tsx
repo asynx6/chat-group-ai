@@ -103,6 +103,8 @@ export default function HomePage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [resetDialog, setResetDialog] = useState(false);
+  const [resetCountdown, setResetCountdown] = useState(5);
   const [typingAgents, setTypingAgents] = useState<Set<string>>(new Set());
   const [agentMemory, setAgentMemory] = useState<Record<string, MemoryEntry[]>>({});
 
@@ -152,6 +154,16 @@ export default function HomePage() {
     }
   }, [messages, scrollToBottom]);
 
+  useEffect(() => {
+    if (!resetDialog) {
+      setResetCountdown(5);
+      return;
+    }
+    if (resetCountdown <= 0) return;
+    const timer = setTimeout(() => setResetCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resetDialog, resetCountdown]);
+
   const getActiveAgents = () => agents.filter((a) => !a.muted);
 
   const getTargetAgents = (text: string): Agent[] => {
@@ -179,18 +191,25 @@ export default function HomePage() {
   };
 
   const buildAgentHistory = (agent: Agent, baseHistory: { role: string; content: string }[]) => {
+    const identityPrompt = `Kamu adalah **${agent.name}** (model: ${agent.model}). Namamu "${agent.name}".${agent.personalityPrompt ? `\n\nKepribadianmu: ${agent.personalityPrompt}` : ''}\n\nSelalu ingat: namamu **${agent.name}**. Perkenalkan dirimu sebagai "${agent.name}" jika ditanya.`;
+
     const entries = agentMemory[agent.id];
-    if (!entries || entries.length === 0) return baseHistory;
+    const hasMemories = entries && entries.length > 0;
 
-    const permanent = entries.filter((e) => e.permanent);
-    const recent = entries.filter((e) => !e.permanent).slice(0, 20);
+    if (!hasMemories) {
+      return [
+        { role: 'system' as const, content: identityPrompt },
+        ...baseHistory,
+      ];
+    }
 
-    if (permanent.length === 0 && recent.length === 0) return baseHistory;
+    const permanent = entries!.filter((e) => e.permanent);
+    const recent = entries!.filter((e) => !e.permanent).slice(0, 20);
 
-    const parts: string[] = [];
+    const parts: string[] = [identityPrompt];
 
     if (permanent.length > 0) {
-      parts.push('## INGATAN PENTING (wajib diingat selamanya):');
+      parts.push('\n---\n## INGATAN PENTING (wajib diingat selamanya):');
       permanent.forEach((m, i) => {
         parts.push(`${i + 1}. ${m.text}`);
       });
@@ -205,9 +224,9 @@ export default function HomePage() {
 
     parts.push('\n_Kamu bisa memilih ingatan mana yang relevan dengan percakapan sekarang. Abaikan yang tidak relevan._');
 
-    const memoryContext = parts.join('\n');
+    const systemContent = parts.join('\n');
     return [
-      { role: 'system' as const, content: memoryContext },
+      { role: 'system' as const, content: systemContent },
       ...baseHistory,
     ];
   };
@@ -495,6 +514,17 @@ export default function HomePage() {
     setSending(false);
   };
 
+  const resetAll = () => {
+    stopAll();
+    setMessages([]);
+    setImages([]);
+    setAgentMemory({});
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(MESSAGES_KEY);
+      localStorage.removeItem(AGENT_MEMORY_KEY);
+    }
+  };
+
   return (
     <div className="h-dvh bg-[#0f0f0f] flex flex-col">
       {/* Floating Agents Header */}
@@ -631,6 +661,56 @@ export default function HomePage() {
           </button>
         </div>
       </div>
+
+      {/* Floating Reset Button */}
+      <button
+        onClick={() => setResetDialog(true)}
+        className="fixed bottom-24 right-6 z-40 w-11 h-11 rounded-full bg-[#1a1a1a] border border-white/10 hover:border-red-500/50 hover:bg-red-500/10 text-gray-400 hover:text-red-400 flex items-center justify-center transition-all shadow-lg"
+        title="Reset chat & ingatan"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+      </button>
+
+      {/* Reset Confirmation Modal */}
+      {resetDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl animate-fade-in-up">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold text-sm">Reset Chat</h3>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  Ini akan menghapus <span className="text-red-400 font-medium">semua chat</span> dan <span className="text-red-400 font-medium">ingatan semua AI</span>. Data tidak bisa dikembalikan.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setResetDialog(false)}
+                className="px-4 py-2 text-xs bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => { resetAll(); setResetDialog(false); }}
+                disabled={resetCountdown > 0}
+                className="px-4 py-2 text-xs bg-red-600 hover:bg-red-500 text-white rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed min-w-[80px]"
+              >
+                {resetCountdown > 0 ? `${resetCountdown}s` : 'Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
