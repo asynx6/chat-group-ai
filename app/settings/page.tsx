@@ -39,6 +39,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -130,15 +131,16 @@ export default function SettingsPage() {
     });
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this agent?')) return;
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
       await fetch('/api/agents', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id: deleteTarget.id }),
       });
       await fetchAgents();
+      setDeleteTarget(null);
     } catch (err) {
       console.error('Failed to delete agent:', err);
     }
@@ -201,7 +203,7 @@ export default function SettingsPage() {
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDelete(agent.id)}
+                    onClick={() => setDeleteTarget({ id: agent.id, name: agent.name })}
                     className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
                   >
                     Delete
@@ -347,6 +349,43 @@ export default function SettingsPage() {
           </form>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl animate-fade-in-up">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold text-sm">Hapus Agent</h3>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  Yakin hapus <span className="text-white font-medium">&quot;{deleteTarget.name}&quot;</span>? Data tidak bisa dikembalikan.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-xs bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 text-xs bg-red-600 hover:bg-red-500 text-white rounded-xl transition-colors"
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
