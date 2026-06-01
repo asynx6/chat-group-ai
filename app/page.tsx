@@ -121,97 +121,135 @@ export default function HomePage() {
 
     setMessages((prev) => [...prev, assistantMsg]);
 
-    const controller = new AbortController();
-    abortControllersRef.current.set(agent.id, controller);
-
     let fullContent = '';
+    const MAX_RETRIES = 10;
+    const RETRY_DELAY = 10000;
 
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: history,
-          agentId: agent.id,
-          images: agent.supportsVision
-            ? images.map((img) => ({ base64: img.base64, hash: img.hash }))
-            : [],
-        }),
-        signal: controller.signal,
-      });
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      // Create fresh controller per attempt
+      const controller = new AbortController();
+      abortControllersRef.current.set(agent.id, controller);
 
-      if (!res.ok) {
-        const err = await res.json();
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsg.id
-              ? { ...m, content: `Error: ${err.error || 'Failed to get response'}` }
-              : m
-          )
-        );
-        return '';
-      }
+      // Check if stopped externally
+      if (!abortControllersRef.current.has(agent.id)) return fullContent;
 
-      const reader = res.body?.getReader();
-      if (!reader) return '';
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: history,
+            agentId: agent.id,
+            images: agent.supportsVision
+              ? images.map((img) => ({ base64: img.base64, hash: img.hash }))
+              : [],
+          }),
+          signal: controller.signal,
+        });
 
-      const decoder = new TextDecoder();
-      let buffer = '';
+        if (!res.ok) {
+          const err = await res.json();
+          const errorMsg = err.error || `HTTP ${res.status}`;
+          throw new Error(errorMsg);
+        }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        // Clear previous error content if retrying
+        if (attempt > 0) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id ? { ...m, content: '' } : m
+            )
+          );
+          fullContent = '';
+        }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const reader = res.body?.getReader();
+        if (!reader) return '';
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.error) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsg.id
-                    ? { ...m, content: `Error: ${parsed.error}` }
-                    : m
-                )
-              );
-            } else if (parsed.content) {
-              fullContent += parsed.content;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsg.id
-                    ? { ...m, content: m.content + parsed.content }
-                    : m
-                )
-              );
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.error) {
+                throw new Error(parsed.error);
+              } else if (parsed.content) {
+                fullContent += parsed.content;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsg.id
+                      ? { ...m, content: m.content + parsed.content }
+                      : m
+                  )
+                );
+              }
+            } catch {
+              // skip unparseable
             }
-          } catch {
-            // skip
           }
         }
+
+        // Success — clean up and return
+        abortControllersRef.current.delete(agent.id);
+        setTypingAgents((prev) => {
+          const next = new Set(prev);
+          next.delete(agent.id);
+          return next;
+        });
+        return fullContent;
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') {
+          abortControllersRef.current.delete(agent.id);
+          return fullContent;
+        }
+
+        if (attempt < MAX_RETRIES) {
+          // Update message with retry status
+          const retriesLeft = MAX_RETRIES - attempt;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id
+                ? { ...m, content: `⚠️ ${(err as Error).message || 'Gagal'}\n\n_Mencoba ulang dalam ${RETRY_DELAY / 1000} detik... (${retriesLeft}x lagi)_` }
+                : m
+            )
+          );
+
+          // Wait before retry
+          await new Promise((r) => setTimeout(r, RETRY_DELAY));
+
+          // Check if stopped during wait
+          if (!abortControllersRef.current.has(agent.id)) return fullContent;
+        } else {
+          // Final failure
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id
+                ? { ...m, content: `❌ ${(err as Error).message || 'Gagal setelah 10x percobaan'}\n\n_Semua retry habis. Coba periksa API key atau koneksi._` }
+                : m
+            )
+          );
+          abortControllersRef.current.delete(agent.id);
+          setTypingAgents((prev) => {
+            const next = new Set(prev);
+            next.delete(agent.id);
+            return next;
+          });
+          return '';
+        }
       }
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') return fullContent;
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsg.id
-            ? { ...m, content: `Error: ${err instanceof Error ? err.message : 'Request failed'}` }
-            : m
-        )
-      );
-    } finally {
-      setTypingAgents((prev) => {
-        const next = new Set(prev);
-        next.delete(agent.id);
-        return next;
-      });
-      abortControllersRef.current.delete(agent.id);
     }
 
     return fullContent;
@@ -392,7 +430,7 @@ export default function HomePage() {
 
       {/* Floating Input Pill */}
       <div className="p-3 pb-5 shrink-0 flex justify-center">
-        <div className="w-full max-w-2xl bg-[#1a1a1a] rounded-3xl shadow-2xl ring-1 ring-white/10 flex items-end gap-2 px-3 py-2">
+        <div className="w-full max-w-2xl bg-[#1a1a1a] rounded-3xl shadow-2xl ring-1 ring-white/10 flex items-center gap-2 px-3 py-2">
           <ImageUpload onUpload={handleImageUpload} disabled={sending} />
           <div className="flex-1">
             <MentionInput
