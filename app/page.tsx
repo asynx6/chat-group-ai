@@ -30,6 +30,7 @@ interface Message {
   agentImage?: string;
   timestamp: number;
   replyTo?: string;
+  isError?: boolean;
 }
 
 interface ImageAttachment {
@@ -191,7 +192,19 @@ export default function HomePage() {
   };
 
   const buildAgentHistory = (agent: Agent, baseHistory: { role: string; content: string }[]) => {
-    const identityPrompt = `Kamu adalah **${agent.name}** (model: ${agent.model}). Namamu "${agent.name}".${agent.personalityPrompt ? `\n\nKepribadianmu: ${agent.personalityPrompt}` : ''}\n\nSelalu ingat: namamu **${agent.name}**. Perkenalkan dirimu sebagai "${agent.name}" jika ditanya.`;
+    // Build global context: info about all other AIs in the chat
+    const otherAgents = agents.filter((a) => a.id !== agent.id && !a.muted);
+    const globalContextParts: string[] = [];
+    if (otherAgents.length > 0) {
+      globalContextParts.push(`\n## AI Lain di Chat Ini:\nKamu sedang dalam group chat dengan AI lain. Berikut daftar AI yang juga ikut ngobrol:`);
+      otherAgents.forEach((a) => {
+        const personality = a.personalityPrompt ? ` — ${a.personalityPrompt}` : '';
+        globalContextParts.push(`- **${a.name}** (${a.model})${personality}`);
+      });
+      globalContextParts.push('\nKamu bisa menyapa, merespon, atau berdebat dengan AI lain. Jangan berpura-pura menjadi AI lain. Gunakan nama mereka saat merujuk.');
+    }
+
+    const identityPrompt = `Kamu adalah **${agent.name}** (model: ${agent.model}). Namamu "${agent.name}".${agent.personalityPrompt ? `\n\nKepribadianmu: ${agent.personalityPrompt}` : ''}\n\nSelalu ingat: namamu **${agent.name}**. Perkenalkan dirimu sebagai "${agent.name}" jika ditanya.${globalContextParts.join('\n')}`;
 
     const entries = agentMemory[agent.id];
     const hasMemories = entries && entries.length > 0;
@@ -328,7 +341,7 @@ export default function HomePage() {
         if (attempt > 0) {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantMsg.id ? { ...m, content: '' } : m
+              m.id === assistantMsg.id ? { ...m, content: '', isError: false } : m
             )
           );
           fullContent = '';
@@ -393,7 +406,7 @@ export default function HomePage() {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id
-                ? { ...m, content: `⚠️ ${(err as Error).message || 'Gagal'}\n\n_Mencoba ulang dalam ${RETRY_DELAY / 1000} detik... (${retriesLeft}x lagi)_` }
+                ? { ...m, content: `⚠️ ${(err as Error).message || 'Gagal'}\n\n_Mencoba ulang dalam ${RETRY_DELAY / 1000} detik... (${retriesLeft}x lagi)_`, isError: true }
                 : m
             )
           );
@@ -408,7 +421,7 @@ export default function HomePage() {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id
-                ? { ...m, content: `❌ ${(err as Error).message || 'Gagal setelah 10x percobaan'}\n\n_Semua retry habis. Coba periksa API key atau koneksi._` }
+                ? { ...m, content: `❌ ${(err as Error).message || 'Gagal setelah 10x percobaan'}\n\n_Semua retry habis. Coba periksa API key atau koneksi._`, isError: true }
                 : m
             )
           );
@@ -665,7 +678,7 @@ export default function HomePage() {
       {/* Floating Reset Button */}
       <button
         onClick={() => setResetDialog(true)}
-        className="fixed bottom-24 right-6 z-40 w-11 h-11 rounded-full bg-[#1a1a1a] border border-white/10 hover:border-red-500/50 hover:bg-red-500/10 text-gray-400 hover:text-red-400 flex items-center justify-center transition-all shadow-lg"
+        className="fixed bottom-4 right-6 z-40 w-11 h-11 rounded-full bg-[#1a1a1a] border border-white/10 hover:border-red-500/50 hover:bg-red-500/10 text-gray-400 hover:text-red-400 flex items-center justify-center transition-all shadow-lg"
         title="Reset chat & ingatan"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
