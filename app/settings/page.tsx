@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import PersonalityPicker from '@/components/PersonalityPicker';
 
 interface Agent {
@@ -17,13 +18,6 @@ interface Agent {
 }
 
 const PRESET_COLORS = ['#a78bfa', '#34d399', '#60a5fa', '#f472b6', '#fbbf24', '#fb923c', '#f87171', '#a3e635'];
-const PRESET_MODELS = [
-  { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (OpenAI)' },
-  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (Anthropic)' },
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Google)' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Google)' },
-];
 
 function loadApiKeys(): Record<string, string> {
   if (typeof window === 'undefined') return {};
@@ -149,7 +143,14 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white p-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6">AI Agent Settings</h1>
+        <h1 className="text-2xl font-bold mb-6 flex items-center gap-3">
+          <Link href="/" className="text-gray-400 hover:text-white transition-colors">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+          </Link>
+          AI Agent Settings
+        </h1>
 
         {/* Agent List */}
         <div className="mb-8">
@@ -223,17 +224,13 @@ export default function SettingsPage() {
               {/* Model */}
               <div>
                 <label className="block text-sm font-medium text-gray-200 mb-1">Model</label>
-                <select
+                <input
+                  type="text"
                   value={form.model}
                   onChange={(e) => setForm({ ...form, model: e.target.value })}
+                  placeholder="e.g. gpt-4o, claude-sonnet-4-20250514, gemini-2.0-flash"
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                >
-                  {PRESET_MODELS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* Base URL */}

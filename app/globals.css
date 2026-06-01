@@ -108,11 +108,12 @@
   content: none;
 }
 
-/* Mobile responsive */
-@media (max-width: 768px) {
-  .sidebar-overlay {
-    position: fixed;
-    z-index: 50;
-    height: 100vh;
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }

@@ -88,11 +88,11 @@ export default function MentionInput({ value, onChange, onSend, agents }: Mentio
         onKeyDown={handleKeyDown}
         placeholder="Type a message... Use @ to mention an AI agent"
         rows={1}
-        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white resize-none focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-gray-500"
+        className="w-full bg-transparent px-1 py-2 text-sm text-white resize-none focus:outline-none placeholder-gray-500"
       />
 
       {showMentions && filteredAgents.length > 0 && (
-        <div className="absolute bottom-full left-0 mb-1 w-64 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl overflow-hidden z-50">
+        <div className="absolute bottom-full left-0 mb-2 w-64 bg-[#1a1a1a] rounded-2xl shadow-2xl overflow-hidden z-50 ring-1 ring-white/10">
           {filteredAgents.map((agent, i) => (
             <button
               key={agent.id}
