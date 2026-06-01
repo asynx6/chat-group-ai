@@ -38,9 +38,27 @@ interface ImageAttachment {
   hash: string;
 }
 
+interface MemoryEntry {
+  text: string;
+  timestamp: number;
+  permanent: boolean;
+}
+
 // --- localStorage helpers ---
 const MESSAGES_KEY = 'chat_messages';
-const AGENT_MEMORY_KEY = 'agent_memory';
+const AGENT_MEMORY_KEY = 'agent_memory_v2';
+const MAX_TEMP_MEMORIES = 50;
+
+const PERMANENT_KEYWORDS = [
+  'ingat', 'jangan lupa', 'selamanya', 'penting', 'catat', 'simpan',
+  'remember', 'forever', 'selalu ingat', 'ingat selalu', 'jangan pernah lupa',
+  'nama aku', 'nama saya', 'panggil aku', 'panggil saya',
+];
+
+function detectPermanent(text: string): boolean {
+  const lower = text.toLowerCase();
+  return PERMANENT_KEYWORDS.some((kw) => lower.includes(kw));
+}
 
 function loadMessages(): Message[] {
   if (typeof window === 'undefined') return [];
@@ -52,12 +70,10 @@ function loadMessages(): Message[] {
 
 function saveMessages(msgs: Message[]) {
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(MESSAGES_KEY, JSON.stringify(msgs));
-  } catch {}
+  try { localStorage.setItem(MESSAGES_KEY, JSON.stringify(msgs)); } catch {}
 }
 
-function loadAgentMemory(): Record<string, string[]> {
+function loadAgentMemory(): Record<string, MemoryEntry[]> {
   if (typeof window === 'undefined') return {};
   try {
     const data = localStorage.getItem(AGENT_MEMORY_KEY);
@@ -65,11 +81,9 @@ function loadAgentMemory(): Record<string, string[]> {
   } catch { return {}; }
 }
 
-function saveAgentMemory(mem: Record<string, string[]>) {
+function saveAgentMemory(mem: Record<string, MemoryEntry[]>) {
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(AGENT_MEMORY_KEY, JSON.stringify(mem));
-  } catch {}
+  try { localStorage.setItem(AGENT_MEMORY_KEY, JSON.stringify(mem)); } catch {}
 }
 
 function parseMentions(text: string, agents: Agent[]): string[] {
@@ -90,11 +104,13 @@ export default function HomePage() {
   const [sending, setSending] = useState(false);
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [typingAgents, setTypingAgents] = useState<Set<string>>(new Set());
-  const [agentMemory, setAgentMemory] = useState<Record<string, string[]>>({});
+  const [agentMemory, setAgentMemory] = useState<Record<string, MemoryEntry[]>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const initializedRef = useRef(false);
+  const isNearBottomRef = useRef(true);
 
   // Load saved messages + agent memory on mount
   useEffect(() => {
@@ -104,11 +120,9 @@ export default function HomePage() {
     setAgentMemory(loadAgentMemory());
   }, []);
 
-  // Save messages to localStorage whenever they change (skip initial load)
+  // Save messages to localStorage whenever they change
   useEffect(() => {
-    if (messages.length > 0) {
-      saveMessages(messages);
-    }
+    if (messages.length > 0) saveMessages(messages);
   }, [messages]);
 
   useEffect(() => {
@@ -120,12 +134,22 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
+  // Smart scroll: only auto-scroll when user is near bottom
+  const handleChatScroll = useCallback(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const threshold = 200;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }, []);
+
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    if (isNearBottomRef.current) {
+      scrollToBottom();
+    }
   }, [messages, scrollToBottom]);
 
   const getActiveAgents = () => agents.filter((a) => !a.muted);
@@ -155,11 +179,33 @@ export default function HomePage() {
   };
 
   const buildAgentHistory = (agent: Agent, baseHistory: { role: string; content: string }[]) => {
-    const memories = agentMemory[agent.id];
-    if (!memories || memories.length === 0) return baseHistory;
+    const entries = agentMemory[agent.id];
+    if (!entries || entries.length === 0) return baseHistory;
 
-    const memoryContext = `[INGATAN KAMU dari percakapan sebelumnya — gunakan ini untuk konteks dan jangan diabaikan]:\n${memories.map((m, i) => `${i + 1}. ${m}`).join('\n')}`;
+    const permanent = entries.filter((e) => e.permanent);
+    const recent = entries.filter((e) => !e.permanent).slice(0, 20);
 
+    if (permanent.length === 0 && recent.length === 0) return baseHistory;
+
+    const parts: string[] = [];
+
+    if (permanent.length > 0) {
+      parts.push('## INGATAN PENTING (wajib diingat selamanya):');
+      permanent.forEach((m, i) => {
+        parts.push(`${i + 1}. ${m.text}`);
+      });
+    }
+
+    if (recent.length > 0) {
+      parts.push('\n## Ingatan Baru-baru Ini:');
+      recent.forEach((m, i) => {
+        parts.push(`${i + 1}. ${m.text}`);
+      });
+    }
+
+    parts.push('\n_Kamu bisa memilih ingatan mana yang relevan dengan percakapan sekarang. Abaikan yang tidak relevan._');
+
+    const memoryContext = parts.join('\n');
     return [
       { role: 'system' as const, content: memoryContext },
       ...baseHistory,
@@ -169,13 +215,38 @@ export default function HomePage() {
   const updateAgentMemory = (agentId: string, userText: string, agentResponse: string) => {
     if (!agentResponse.trim()) return;
 
-    const entry = `User: "${userText}" → Kamu menjawab: "${agentResponse.slice(0, 300)}"`;
+    const isPermanent = detectPermanent(userText);
+    const summary = agentResponse.slice(0, 400).replace(/\n+/g, ' ').trim();
+    const entry: MemoryEntry = {
+      text: `User: "${userText}" → Jawaban: "${summary}"`,
+      timestamp: Date.now(),
+      permanent: isPermanent,
+    };
+
     setAgentMemory((prev) => {
       const existing = prev[agentId] || [];
-      // Keep last 15 memory entries, newest first, avoid duplicates
-      const filtered = existing.filter((m) => !m.includes(userText));
-      const updated = [entry, ...filtered].slice(0, 15);
-      const next = { ...prev, [agentId]: updated };
+
+      // Remove similar old entries
+      const filtered = existing.filter((e) => {
+        const similarity = e.text.includes(userText.slice(0, 30));
+        if (similarity && !e.permanent) return false; // Replace non-permanent duplicates
+        return true;
+      });
+
+      const updated = [entry, ...filtered];
+
+      // Sort: permanent first, then by timestamp
+      updated.sort((a, b) => {
+        if (a.permanent && !b.permanent) return -1;
+        if (!a.permanent && b.permanent) return 1;
+        return b.timestamp - a.timestamp;
+      });
+
+      // Keep all permanent + up to MAX_TEMP_MEMORIES temporary
+      const permanent = updated.filter((e) => e.permanent);
+      const temporary = updated.filter((e) => !e.permanent).slice(0, MAX_TEMP_MEMORIES);
+
+      const next = { ...prev, [agentId]: [...permanent, ...temporary] };
       saveAgentMemory(next);
       return next;
     });
@@ -480,7 +551,11 @@ export default function HomePage() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
+      <div
+        ref={chatContainerRef}
+        onScroll={handleChatScroll}
+        className="flex-1 overflow-y-auto px-4 py-2 space-y-4 scroll-smooth"
+      >
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center animate-fade-in">
