@@ -15,6 +15,7 @@ interface Agent {
   personalityPrompt: string;
   color: string;
   muted: boolean;
+  profileLink: string;
 }
 
 const PRESET_COLORS = ['#a78bfa', '#34d399', '#60a5fa', '#f472b6', '#fbbf24', '#fb923c', '#f87171', '#a3e635'];
@@ -48,6 +49,7 @@ export default function SettingsPage() {
     personalityId: '',
     personalityPrompt: '',
     color: '#a78bfa',
+    profileLink: '',
   });
 
   useEffect(() => {
@@ -80,6 +82,7 @@ export default function SettingsPage() {
       personalityId: '',
       personalityPrompt: '',
       color: '#a78bfa',
+      profileLink: '',
     });
     setEditingId(null);
   };
@@ -123,6 +126,7 @@ export default function SettingsPage() {
       personalityId: agent.personalityId,
       personalityPrompt: agent.personalityPrompt,
       color: agent.color,
+      profileLink: agent.profileLink || '',
     });
   };
 
@@ -252,6 +256,20 @@ export default function SettingsPage() {
                   value={form.apiKey}
                   onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
                   placeholder="sk-..."
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Profile Link */}
+              <div>
+                <label className="block text-sm font-medium text-gray-200 mb-1">
+                  Profile Model Link <span className="text-gray-500 font-normal">— opsional</span>
+                </label>
+                <input
+                  type="url"
+                  value={form.profileLink}
+                  onChange={(e) => setForm({ ...form, profileLink: e.target.value })}
+                  placeholder="https://..."
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>

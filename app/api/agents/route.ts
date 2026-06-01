@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     personalityPrompt: body.personalityPrompt || '',
     color: body.color || '#6b7280',
     muted: body.muted ?? false,
+    profileLink: body.profileLink || '',
   };
 
   agents.push(newAgent);

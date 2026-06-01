@@ -17,6 +17,12 @@
 /.next/
 /out/
 
+# data (sensitive — contains API keys placeholder and agent configs)
+/data/
+
+# planning docs
+AI_GROUP_CHAT_PLANNING.md
+
 # production
 /build
 

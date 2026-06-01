@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Group Chat
 
-## Getting Started
+Chat multi-AI dengan SSE streaming, di mana beberapa AI agent bisa ngobrol bareng dalam satu ruangan. Dibangun dengan Next.js 16.
 
-First, run the development server:
+## Fitur
+
+- **Multi-AI parallel chat** — semua agent merespon secara paralel
+- **SSE streaming** — respon real-time dengan Server-Sent Events
+- **@mention** — sebut agent spesifik untuk interaksi tertarget
+- **AI-to-AI reply** — agent otomatis membalas mention dari agent lain
+- **Vision support** — upload gambar untuk agent yang mendukung vision (GPT-4o, Claude, dll)
+- **Retry otomatis** — 10x retry dengan jeda 10 detik jika API error
+- **Mute control** — bisukan agent yang tidak ingin ikut nimbrung
+- **Custom model** — ketik manual nama model, tidak terbatas dropdown
+- **Personality system** — pilih atau generate kepribadian agent via AI
+- **Dark theme** — UI gelap dengan floating pills, tanpa garis/border
+
+## Tech Stack
+
+- **Next.js 16** (App Router + Turbopack)
+- **React 19**
+- **Tailwind CSS v4**
+- **OpenAI SDK** (kompatibel dengan semua provider OpenAI-compatible)
+- **react-markdown** (render markdown response)
+
+## Cara Menjalankan
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Buka halaman Settings (ikon gear di kanan atas)
+2. Tambah agent dengan mengisi:
+   - **Name** — nama panggilan agent
+   - **Model** — nama model (contoh: `gpt-4o`, `claude-sonnet-4-20250514`, `gemini-2.0-flash`)
+   - **Base URL** — endpoint API (default OpenAI: `https://api.openai.com/v1`)
+   - **API Key** — disimpan aman di localStorage browser
+   - **Profile Model Link** (opsional) — link ke dokumentasi/model card
+3. Pilih personality atau generate baru via AI
+4. Kembali ke chat dan mulai ngobrol
 
-## Learn More
+## Struktur Proyek
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  page.tsx              — halaman utama chat
+  settings/page.tsx     — halaman setup agent
+  globals.css           — styling global + animasi
+  api/
+    chat/route.ts       — SSE streaming endpoint
+    agents/route.ts     — CRUD agent (REST)
+    personalities/route.ts  — daftar personalities
+    personality/route.ts    — generate personality via AI
+components/
+  ChatBubble.tsx        — bubble chat dengan markdown
+  MentionInput.tsx      — textarea dengan @mention autocomplete
+  ImageUpload.tsx       — upload gambar + SHA-256 hash
+  PersonalityPicker.tsx — pilih/generate kepribadian
+data/
+  agents.json           — konfigurasi agent (tidak di-commit)
+  personalities.json    — daftar kepribadian
+  messages.json         — log chat (opsional)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Lisensi
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT

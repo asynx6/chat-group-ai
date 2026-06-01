@@ -17,6 +17,7 @@ interface Agent {
   personalityPrompt: string;
   color: string;
   muted: boolean;
+  profileLink: string;
 }
 
 interface Message {
